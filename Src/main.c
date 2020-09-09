@@ -37,6 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define uartBufferSize 1024
 #define adcBufferSize 10
 /* USER CODE END PD */
 
@@ -52,8 +53,9 @@ extern TIM_HandleTypeDef htim1, htim3, htim6, htim15;
 extern UART_HandleTypeDef huart3;
 extern ADC_HandleTypeDef hadc;
 uint8_t working = 1;
-uint8_t buffer[100];
-uint32_t bufferIdx = 0;
+uint8_t uartBuffer[uartBufferSize];
+uint32_t uartBufferStartIdx = 0, uartBufferEndIdx = 0;
+uint8_t uartORF = 0;
 uint32_t adcVal = 0;//*0.025=pad Voltage
 uint32_t adcBuffer[adcBufferSize];
 uint32_t adcBufferIdx = 0;
@@ -100,7 +102,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -123,16 +124,17 @@ int main(void)
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim15, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim15, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
+
   HAL_TIM_Base_Start_IT(&htim7);
   HAL_ADC_Start_DMA(&hadc, &adcVal, 1);
-  HAL_UART_Receive_IT(&huart3, &buffer[bufferIdx++], 1);
 
-  HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
-  HAL_Delay(300);
-  TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_4, TIM_CCx_DISABLE);
-
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_SET);
+  HAL_Delay(10);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_RESET);//BLE bypass mode
+  HAL_UART_Receive_IT(&huart3, &uartBuffer[uartBufferEndIdx++], 1);
+  Beep();
   /* USER CODE END 2 */
-
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (working)
@@ -184,8 +186,37 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart->Instance == USART3)
 	{
-		  HAL_UART_Receive_IT(&huart3, &buffer[bufferIdx], 1);
-		  bufferIdx = ++bufferIdx % 100;
+		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8) == GPIO_PIN_SET)
+		{
+			if(uartBuffer[(uartBufferEndIdx + uartBufferSize - 1) % uartBufferSize] == '\r')
+			{
+				for(;uartBufferStartIdx < uartBufferEndIdx; uartBufferStartIdx++)
+				{
+					HAL_UART_Transmit(&huart3, &uartBuffer[uartBufferStartIdx % uartBufferSize], 1, 10);
+				}
+
+				if(uartORF)
+				{
+					uartORF = 0;
+				}
+				if(uartBufferStartIdx >= uartBufferSize)
+				{
+					uartBufferStartIdx -= uartBufferSize;
+					uartBufferEndIdx -= uartBufferSize;
+				}
+			}
+		}
+		else
+		{
+			uartBufferStartIdx = uartBufferEndIdx;
+		}
+
+		if(uartBufferEndIdx - uartBufferStartIdx >= uartBufferSize)
+		{
+			uartORF = 1;
+			uartBufferEndIdx--;
+		}
+		HAL_UART_Receive_IT(&huart3, &uartBuffer[uartBufferEndIdx++ % uartBufferSize], 1);
 	}
 }
 
