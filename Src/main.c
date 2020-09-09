@@ -20,6 +20,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "adc.h"
+#include "crc.h"
 #include "dma.h"
 #include "tim.h"
 #include "usart.h"
@@ -52,10 +53,12 @@
 extern TIM_HandleTypeDef htim1, htim3, htim6, htim15;
 extern UART_HandleTypeDef huart3;
 extern ADC_HandleTypeDef hadc;
+extern CRC_HandleTypeDef hcrc;
 uint8_t working = 1;
 uint8_t uartBuffer[uartBufferSize];
-uint32_t uartBufferStartIdx = 0, uartBufferEndIdx = 0;
-uint8_t uartORF = 0;
+uint8_t cmdBuffer[uartBufferSize];
+uint32_t uartBufferStartIdx = 0, uartBufferEndIdx = 0, cmdBufferLen;
+uint8_t uartORF = 0, cmdUF = 0;
 uint32_t adcVal = 0;//*0.025=pad Voltage
 uint32_t adcBuffer[adcBufferSize];
 uint32_t adcBufferIdx = 0;
@@ -67,11 +70,21 @@ static uint32_t padSettingPulse[26] ={1,7,15,24,34,43,54,64,75,86,98,110,122,134
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-uint16_t strLen(uint8_t *str)
+uint8_t CmdCmp(char *str, uint32_t size)
 {
-	uint16_t i;
-	for(i = 0; str[i] != '\r'; i++);
-	return i + 1;
+	if(cmdBufferLen != size)
+	{
+		return 0;
+	}
+	for(uint32_t i = 0; i < cmdBufferLen && i < size; i++)
+	{
+		if(cmdBuffer[i] != str[i])
+		{
+			return 0;
+		}
+	}
+
+	return 1;
 }
 
 void Beep()
@@ -79,6 +92,49 @@ void Beep()
 	TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_4, TIM_CCx_ENABLE);
 	for(int i = 0; i < 30000; i++);
 	TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_4, TIM_CCx_DISABLE);
+}
+
+void VoltageUp()
+{
+	target_mV += 5000;
+	if(target_mV > max_mV)
+	{
+		target_mV = max_mV;
+	}
+	uint32_t idx = target_mV / 1000;
+	if(idx > 0)
+	{
+		idx--;
+	}
+	if(idx <= 25)
+	{
+		htim3.Instance->CCR1 = padSettingPulse[idx];
+	}
+}
+
+void VoltageDown()
+{
+	if(target_mV < 5000)
+	{
+		target_mV = min_mV;
+	}
+	else
+	{
+		target_mV -= 5000;
+	}
+	if(target_mV < min_mV)
+	{
+		target_mV = min_mV;
+	}
+	uint32_t idx = target_mV / 1000;
+	if(idx > 0)
+	{
+		idx--;
+	}
+	if(idx <= 25)
+	{
+		htim3.Instance->CCR1 = padSettingPulse[idx];
+	}
 }
 /* USER CODE END PFP */
 
@@ -120,6 +176,7 @@ int main(void)
   MX_TIM7_Init();//pad timer interrupt
   MX_TIM15_Init();//pad pwm
   MX_USART3_UART_Init();
+  MX_CRC_Init();
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
   HAL_TIM_PWM_Start(&htim15, TIM_CHANNEL_1);
@@ -135,10 +192,27 @@ int main(void)
   HAL_UART_Receive_IT(&huart3, &uartBuffer[uartBufferEndIdx++], 1);
   Beep();
   /* USER CODE END 2 */
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (working)
   {
+	  if(cmdUF)
+	  {
+		  if(CmdCmp("+", 1))
+		  {
+			  VoltageUp();
+		  }
+		  else if(CmdCmp("-", 1))
+		  {
+			  VoltageDown();
+		  }
+		  else if(CmdCmp("OFF", 3))
+		  {
+			  working = 0;
+		  }
+		  cmdUF = 0;
+	  }
   }
     /* USER CODE END WHILE */
 
@@ -190,11 +264,17 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 		{
 			if(uartBuffer[(uartBufferEndIdx + uartBufferSize - 1) % uartBufferSize] == '\r')
 			{
-				for(;uartBufferStartIdx < uartBufferEndIdx; uartBufferStartIdx++)
+				if(cmdUF == 0)
 				{
-					HAL_UART_Transmit(&huart3, &uartBuffer[uartBufferStartIdx % uartBufferSize], 1, 10);
+					for(cmdBufferLen = 0; uartBufferStartIdx + cmdBufferLen < uartBufferEndIdx; cmdBufferLen++)
+					{
+						cmdBuffer[cmdBufferLen] = uartBuffer[(uartBufferStartIdx + cmdBufferLen) % uartBufferSize];
+					}
+					cmdBuffer[--cmdBufferLen] = '\0';
 				}
+				uartBufferStartIdx = uartBufferEndIdx;
 
+				cmdUF = 1;
 				if(uartORF)
 				{
 					uartORF = 0;
@@ -228,28 +308,11 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			Beep();
 			for(int i = 0; i < 30000; i++);
 			Beep();
-
-			if(target_mV < 5000)
-			{
-				target_mV = min_mV;
-			}
-			else
-			{
-				target_mV -= 5000;
-			}
-			if(target_mV < min_mV)
-			{
-				target_mV = min_mV;
-			}
+			VoltageDown();
 			break;
 		case GPIO_PIN_1://pad voltage up
 			Beep();
-
-			target_mV += 5000;
-			if(target_mV > max_mV)
-			{
-				target_mV = max_mV;
-			}
+			VoltageUp();
 			break;
 		case GPIO_PIN_2://power button interrupt
 			htim6.Instance->CNT = 0;
@@ -257,15 +320,6 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 			HAL_TIM_Base_Start_IT(&htim6);
 			Beep();
 			break;
-	}
-	uint32_t idx = target_mV / 1000;
-	if(idx > 0)
-	{
-		idx--;
-	}
-	if(idx <= 25)
-	{
-		htim3.Instance->CCR1 = padSettingPulse[idx];
 	}
 }
 
@@ -287,7 +341,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	else if(htim->Instance == TIM7)
 	{
 		htim15.Instance->CCR1 = htim15.Instance->CCR2 = htim15.Instance->ARR / 2;
-		while(htim7.Instance->CR1 & 0x01 && htim7.Instance->CNT < 25);
+		while(htim7.Instance->CR1 & 0x01 && htim7.Instance->CNT < 27);
 		htim15.Instance->CCR1 = 0;
 		htim15.Instance->CCR2 = htim15.Instance->ARR + 1;
 
@@ -305,11 +359,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			{
 				if(target_mV - avg > 2000)
 				{
-					pulse += 20;
+					pulse += 10;
 				}
 				else
 				{
-					pulse += (target_mV - avg)/100;
+					pulse += (target_mV - avg)/200;
 				}
 				if(pulse > htim3.Instance->ARR)
 				{
@@ -320,11 +374,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			{
 				if(avg - target_mV > 2000)
 				{
-					pulse -= 20;
+					pulse -= 10;
 				}
 				else
 				{
-					pulse -= (avg - target_mV)/100;
+					pulse -= (avg - target_mV)/200;
 				}
 				if(pulse < 0)
 				{
