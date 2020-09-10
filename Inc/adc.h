@@ -33,13 +33,23 @@
 extern ADC_HandleTypeDef hadc;
 
 /* USER CODE BEGIN Private defines */
+#define adcBufferSize 10
 
+typedef struct __ADC_Result
+{
+	uint32_t adcData;//*0.025=pad Voltage
+	uint32_t adcBuffer[adcBufferSize];
+	uint32_t adcBufferIdx;
+	_Bool adcBufferOVF;
+}ADC_Result;
 /* USER CODE END Private defines */
 
 void MX_ADC_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-
+void ADC_Result_Init(ADC_Result* adc, ADC_HandleTypeDef *hadc);
+void ADC_ReadDMA(ADC_Result* adc);
+uint32_t ADC_Average_mV(ADC_Result *adc);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

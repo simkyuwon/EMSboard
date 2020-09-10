@@ -141,7 +141,36 @@ void HAL_ADC_MspDeInit(ADC_HandleTypeDef* adcHandle)
 }
 
 /* USER CODE BEGIN 1 */
+void ADC_Result_Init(ADC_Result* adc, ADC_HandleTypeDef *hadc)
+{
+	adc->adcBufferIdx = 0;
+	HAL_ADC_Start_DMA(hadc, &(adc->adcData), 1);
+}
 
+void ADC_ReadDMA(ADC_Result* adc)
+{
+	if(adc->adcBufferIdx < adcBufferSize)
+	{
+		adc->adcBuffer[adc->adcBufferIdx++] = adc->adcData;
+		adc->adcBufferOVF = 0;
+	}
+	else
+	{
+		adc->adcBuffer[adcBufferSize - 1] = adc->adcData;
+		adc->adcBufferOVF = 1;
+	}
+}
+
+uint32_t ADC_Average_mV(ADC_Result *adc)
+{
+	uint32_t avg = 0;
+	for(uint32_t i = 0; i < adcBufferSize; i++)
+	{
+		avg += adc->adcBuffer[i];
+	}
+	adc->adcBufferIdx = 0;
+	return avg / adcBufferSize;
+}
 /* USER CODE END 1 */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

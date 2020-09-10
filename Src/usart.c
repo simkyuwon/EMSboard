@@ -21,7 +21,6 @@
 #include "usart.h"
 
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 UART_HandleTypeDef huart3;
@@ -107,7 +106,72 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 }
 
 /* USER CODE BEGIN 1 */
+void UART_ReceiveData_Init(UART_ReceiveDataTypeDef *rduart, UART_HandleTypeDef* uartHandle)
+{
+	rduart->huart = uartHandle;
+	rduart->cmdUF = 0;
+	rduart->uartORF = 0;
+	rduart->uartBufferStartIdx = 0;
+	rduart->uartBufferEndIdx = 0;
+}
 
+HAL_StatusTypeDef UART_ReceiveData(UART_ReceiveDataTypeDef *rduart)
+{
+	HAL_StatusTypeDef ret = HAL_UART_Receive_IT(rduart->huart, &rduart->uartBuffer[rduart->uartBufferEndIdx++], 1);
+	if(rduart->uartBufferEndIdx - rduart->uartBufferStartIdx >= uartBufferSize)
+	{
+		rduart->uartBufferEndIdx -= 1;
+		rduart->uartORF = 1;
+	}
+	return ret;
+}
+
+_Bool CmdCmp(UART_ReceiveDataTypeDef *rduart, char *str, uint32_t size)
+{
+	if(rduart->cmdBufferLen != size)
+	{
+		return 0;
+	}
+
+	for(uint32_t i = 0; i < rduart->cmdBufferLen && i < size; i++)
+	{
+		if(rduart->cmdBuffer[i] != str[i])
+		{
+			return 0;
+		}
+	}
+
+	return 1;
+}
+
+char UART_LastInputData(UART_ReceiveDataTypeDef *rduart)
+{
+	return rduart->uartBuffer[(rduart->uartBufferEndIdx + uartBufferSize - 1) % uartBufferSize];
+}
+
+_Bool UART_CopyUartBuf2CmdBuf(UART_ReceiveDataTypeDef *rduart)
+{
+	if(rduart->cmdUF)
+	{
+		return 0;
+	}
+
+	for(rduart->cmdBufferLen = 0; rduart->uartBufferStartIdx + rduart->cmdBufferLen < rduart->uartBufferEndIdx; rduart->cmdBufferLen++)
+	{
+		rduart->cmdBuffer[rduart->cmdBufferLen] = rduart->uartBuffer[(rduart->uartBufferStartIdx + rduart->cmdBufferLen) % uartBufferSize];
+	}
+	rduart->cmdBufferLen -= 1;
+	rduart->cmdUF = 1;
+	rduart->uartBufferStartIdx = rduart->uartBufferEndIdx;
+
+	if(rduart->uartBufferStartIdx >= uartBufferSize)
+	{
+		rduart->uartBufferStartIdx -= uartBufferSize;
+		rduart->uartBufferEndIdx -= uartBufferSize;
+	}
+
+	return 1;
+}
 /* USER CODE END 1 */
 
 /************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

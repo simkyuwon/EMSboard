@@ -33,13 +33,29 @@
 extern UART_HandleTypeDef huart3;
 
 /* USER CODE BEGIN Private defines */
+#define uartBufferSize 1024
 
+typedef struct __UART_ReceiveDataTypeDef
+{
+	UART_HandleTypeDef *huart;
+	char uartBuffer[uartBufferSize];
+	char cmdBuffer[uartBufferSize];
+	uint32_t uartBufferStartIdx;
+	uint32_t uartBufferEndIdx;
+	uint32_t cmdBufferLen;
+	_Bool uartORF;
+	_Bool cmdUF;
+} UART_ReceiveDataTypeDef;
 /* USER CODE END Private defines */
 
 void MX_USART3_UART_Init(void);
 
 /* USER CODE BEGIN Prototypes */
-
+void UART_ReceiveData_Init(UART_ReceiveDataTypeDef *rduart, UART_HandleTypeDef* uartHandle);
+HAL_StatusTypeDef UART_ReceiveData(UART_ReceiveDataTypeDef *rduart);
+_Bool CmdCmp(UART_ReceiveDataTypeDef *rduart, char *str, uint32_t size);
+char UART_LastInputData(UART_ReceiveDataTypeDef *rduart);
+_Bool UART_CopyUartBuf2CmdBuf(UART_ReceiveDataTypeDef *rduart);
 /* USER CODE END Prototypes */
 
 #ifdef __cplusplus

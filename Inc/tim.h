@@ -37,6 +37,33 @@ extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim15;
 
 /* USER CODE BEGIN Private defines */
+#define VOLTAGE_MAX_LEVEL 15
+
+static uint32_t PAD_AMPLITUDE_VOLTAGE[] =
+{
+		0,
+		1000,
+		2000,
+		3000,
+		4000,
+		5000,
+		6000,
+		7000,
+		8000,
+		9000,
+		10000,
+		11000,
+		12000,
+		13000,
+		14000,
+		15000
+};
+
+typedef struct __PAD_ControlData
+{
+	uint32_t pulseAmplitude;
+	uint32_t pulseCount;
+}PAD_ControlData;
 
 /* USER CODE END Private defines */
 
@@ -49,6 +76,11 @@ void MX_TIM15_Init(void);
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* USER CODE BEGIN Prototypes */
+void PAD_ControlData_Init(PAD_ControlData *pad);
+void PAD_ChangeCount(PAD_ControlData *pad, uint32_t cnt);
+void PAD_ChangeVoltage(PAD_ControlData *pad, uint32_t now_mV);
+void PAD_VoltageUp(PAD_ControlData *pad);
+void PAD_VoltageDown(PAD_ControlData *pad);
 
 /* USER CODE END Prototypes */
 
