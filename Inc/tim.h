@@ -39,6 +39,9 @@ extern TIM_HandleTypeDef htim15;
 /* USER CODE BEGIN Private defines */
 #define VOLTAGE_MAX_LEVEL 15
 
+#define SQUARE_WAVE 0
+#define RAMP_WAVE 1
+
 static uint32_t PAD_AMPLITUDE_VOLTAGE[] =
 {
 		0,
@@ -63,6 +66,7 @@ typedef struct __PAD_ControlData
 {
 	uint32_t pulseAmplitude;
 	uint32_t pulseCount;
+	uint8_t pulseType;
 }PAD_ControlData;
 
 /* USER CODE END Private defines */

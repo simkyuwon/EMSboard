@@ -449,6 +449,7 @@ void PAD_ControlData_Init(PAD_ControlData *pad)
 {
 	pad->pulseAmplitude = 5;
 	pad->pulseCount = 3;
+	pad->pulseType = SQUARE_WAVE;
 }
 
 void PAD_ChangeCount(PAD_ControlData *pad, uint32_t cnt)

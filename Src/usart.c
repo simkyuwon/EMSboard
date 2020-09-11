@@ -117,7 +117,7 @@ void UART_ReceiveData_Init(UART_ReceiveDataTypeDef *rduart, UART_HandleTypeDef* 
 
 HAL_StatusTypeDef UART_ReceiveData(UART_ReceiveDataTypeDef *rduart)
 {
-	HAL_StatusTypeDef ret = HAL_UART_Receive_IT(rduart->huart, &rduart->uartBuffer[rduart->uartBufferEndIdx++], 1);
+	HAL_StatusTypeDef ret = HAL_UART_Receive_IT(rduart->huart, &(rduart->uartBuffer[rduart->uartBufferEndIdx++]), 1);
 	if(rduart->uartBufferEndIdx - rduart->uartBufferStartIdx >= uartBufferSize)
 	{
 		rduart->uartBufferEndIdx -= 1;

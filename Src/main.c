@@ -65,9 +65,9 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 void Beep()
 {
-	TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_4, TIM_CCx_ENABLE);
+	TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_4, TIM_CCx_ENABLE);//buzzer on
 	for(int i = 0; i < 30000; i++);
-	TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_4, TIM_CCx_DISABLE);
+	TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_4, TIM_CCx_DISABLE);//buzzer off
 }
 
 /* USER CODE END PFP */
@@ -80,6 +80,7 @@ void Beep()
   * @brief  The application entry point.
   * @retval int
   */
+
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -121,9 +122,12 @@ int main(void)
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 
   HAL_TIM_Base_Start_IT(&htim7);
+  HAL_TIM_Base_Start_IT(&htim15);
+
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
 
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_SET);
-  HAL_UART_Transmit(&huart3, "AT+DISCONNECT\r", 14, 10);
   HAL_Delay(10);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_RESET);//BLE bypass mode
   UART_ReceiveData(&rduart3);
@@ -149,6 +153,14 @@ int main(void)
 		  else if(CmdCmp(&rduart3, "OFF", 3))
 		  {
 			  working = 0;
+		  }
+		  else if(CmdCmp(&rduart3, "S", 1))
+		  {
+			  pad.pulseType = SQUARE_WAVE;
+		  }
+		  else if(CmdCmp(&rduart3, "R", 1))
+		  {
+			  pad.pulseType = RAMP_WAVE;
 		  }
 		  else
 		  {
@@ -210,7 +222,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
 	if(huart->Instance == USART3)
 	{
-		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8) == GPIO_PIN_SET)
+		if(HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8) == GPIO_PIN_SET)//Connected
 		{
 			if(UART_LastInputData(&rduart3) == '\r')
 			{
@@ -257,6 +269,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	}
 }
 
+uint32_t pulseS = 0;
+
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
 	if(htim->Instance == TIM6)
@@ -274,9 +288,20 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	}
 	else if(htim->Instance == TIM7)
 	{
-		htim15.Instance->CCR1 = htim15.Instance->CCR2 = htim15.Instance->ARR / 2;//pulse on
-		htim15.Instance->RCR = pad.pulseCount - 1;
-		HAL_TIM_Base_Start_IT(&htim15);
+		if(pad.pulseType == SQUARE_WAVE)
+		{
+			htim15.Instance->CCR1 = htim15.Instance->CCR2 = htim15.Instance->ARR / 2;//pulse on
+			htim15.Instance->RCR = pad.pulseCount - 1;
+			htim15.Instance->SR |= 0x1;
+		}
+		else if(pad.pulseType == RAMP_WAVE)
+		{
+			if(pulseS == 0)
+			{
+				htim15.Instance->RCR = 1;
+				htim15.Instance->SR |= 0x1;
+			}
+		}
 
 		ADC_ReadDMA(&adc);
 		if(adc.adcBufferOVF)//pad voltage control
@@ -286,9 +311,41 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 	}
 	else if(htim->Instance == TIM15)//pulse off
 	{
-		HAL_TIM_Base_Start_IT(&htim15);
-		htim15.Instance->CCR1 = 0;
-		htim15.Instance->CCR2 = htim15.Instance->ARR + 1;
+		if(pad.pulseType == SQUARE_WAVE)
+		{
+			htim15.Instance->CCR1 = 0;
+			htim15.Instance->CCR2 = htim15.Instance->ARR + 1;
+			htim15.Instance->SR &= ~0x1;//interrupt disable
+		}
+		else if(pad.pulseType == RAMP_WAVE)
+		{
+			switch(pulseS)
+			{
+			case 0:
+				htim15.Instance->CCR1 += 4;
+				if(htim15.Instance->CCR1 >= htim15.Instance->ARR)
+					pulseS = 1;
+				break;
+			case 1:
+				htim15.Instance->CCR1 -= 4;
+				if(htim15.Instance->CCR1 <= 1)
+					pulseS = 2;
+				break;
+			case 2:
+				htim15.Instance->CCR2 -= 4;
+				if(htim15.Instance->CCR2 <= 1)
+					pulseS = 3;
+				break;
+			case 3:
+				htim15.Instance->CCR2 += 4;
+				if(htim15.Instance->CCR2 >= htim15.Instance->ARR)
+				{
+					pulseS = 0;
+					htim15.Instance->SR &= ~0x1;//interrupt disable
+				}
+				break;
+			}
+		}
 	}
 }
 

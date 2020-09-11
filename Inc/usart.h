@@ -38,8 +38,8 @@ extern UART_HandleTypeDef huart3;
 typedef struct __UART_ReceiveDataTypeDef
 {
 	UART_HandleTypeDef *huart;
-	char uartBuffer[uartBufferSize];
-	char cmdBuffer[uartBufferSize];
+	uint8_t uartBuffer[uartBufferSize];
+	uint8_t cmdBuffer[uartBufferSize];
 	uint32_t uartBufferStartIdx;
 	uint32_t uartBufferEndIdx;
 	uint32_t cmdBufferLen;
