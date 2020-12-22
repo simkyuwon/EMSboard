@@ -25,7 +25,7 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
-
+#include "stdio.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
@@ -57,6 +57,7 @@ UART_ReceiveDataTypeDef rduart3;
 ADC_Result adc;
 
 uint8_t working = 1;
+uint8_t padState = 1;
 
 /* USER CODE END PV */
 
@@ -66,7 +67,7 @@ void SystemClock_Config(void);
 void Beep()
 {
 	TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_4, TIM_CCx_ENABLE);//buzzer on
-	for(int i = 0; i < 30000; i++);
+	for(int i = 0; i < 10000; i++);
 	TIM_CCxChannelCmd(htim1.Instance, TIM_CHANNEL_4, TIM_CCx_DISABLE);//buzzer off
 }
 
@@ -80,7 +81,7 @@ void Beep()
   * @brief  The application entry point.
   * @retval int
   */
-
+uint8_t tx_str[] = "ATZ\r";
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -97,6 +98,7 @@ int main(void)
   PAD_ControlData_Init(&pad);
   /* USER CODE END Init */
 
+
   /* Configure the system clock */
   SystemClock_Config();
 
@@ -110,10 +112,9 @@ int main(void)
   MX_TIM1_Init();//buzzer pwm
   MX_TIM3_Init();//pad vdc pwm
   MX_TIM6_Init();//power button timer interrupt
-  MX_TIM7_Init();//pad timer interrupt
+  //MX_TIM7_Init();//pad timer interrupt
   MX_TIM15_Init();//pad pwm
   MX_USART3_UART_Init();
-  MX_CRC_Init();
   ADC_Result_Init(&adc, &hadc);
   /* USER CODE BEGIN 2 */
   HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
@@ -121,57 +122,76 @@ int main(void)
   HAL_TIM_PWM_Start(&htim15, TIM_CHANNEL_2);
   HAL_TIM_PWM_Start(&htim1, TIM_CHANNEL_4);
 
-  HAL_TIM_Base_Start_IT(&htim7);
+  HAL_TIM_Base_Start_IT(&htim3);
+  //HAL_TIM_Base_Start_IT(&htim7);
   HAL_TIM_Base_Start_IT(&htim15);
 
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_9, GPIO_PIN_RESET);
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
-
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_SET);
-  HAL_Delay(10);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, GPIO_PIN_RESET);//BLE bypass mode
   UART_ReceiveData(&rduart3);
-  Beep();
-  /* USER CODE END 2 */
 
+  Beep();
+
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);//init ble module
+  for(int i = 0; i < 10000; ++i);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_SET);
+  for(int i = 0; i < 10000; ++i);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_10, GPIO_PIN_RESET);
+  //HAL_UART_Transmit_IT(&huart3, tx_str, sizeof(tx_str) - 1);
+
+
+  /* USER CODE END 2 */
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (working)
   {
 	  if(rduart3.cmdUF)
 	  {
+		  Beep();
+		  HAL_UART_Transmit(&huart3, rduart3.cmdBuffer, rduart3.cmdBufferLen, 100);
 		  if(CmdCmp(&rduart3, "+", 1))
 		  {
 			  PAD_VoltageUp(&pad);
-			  HAL_UART_Transmit(&huart3, "+", 1, 10);
 		  }
 		  else if(CmdCmp(&rduart3, "-", 1))
 		  {
 			  PAD_VoltageDown(&pad);
-			  HAL_UART_Transmit(&huart3, "-", 1, 10);
+		  }
+		  else if(CmdCmp(&rduart3, "O", 1))
+		  {
+			  padState = 1;
+		  }
+		  else if(CmdCmp(&rduart3, "X", 1))
+		  {
+			  padState = 0;
 		  }
 		  else if(CmdCmp(&rduart3, "OFF", 3))
 		  {
 			  working = 0;
 		  }
-		  else if(CmdCmp(&rduart3, "S", 1))
+		  /*else if(CmdCmp(&rduart3, "S", 1))
 		  {
 			  pad.pulseType = SQUARE_WAVE;
 		  }
 		  else if(CmdCmp(&rduart3, "R", 1))
 		  {
 			  pad.pulseType = RAMP_WAVE;
-		  }
-		  else
+		  }*/
+		  else if(rduart3.cmdBuffer[0] == 'C')
 		  {
-			  for(char i = '0'; i <= '9'; i++)
-			  {
-				  if(CmdCmp(&rduart3, &i, 1))
-				  {
-					  PAD_ChangeCount(&pad, i - '0');
-					  break;
-				  }
-			  }
+			  int tmp;
+			  sscanf((char *)&rduart3.cmdBuffer[1], "%d", &tmp);
+			  PAD_ChangeCount(&pad, tmp);
+		  }
+		  else if(rduart3.cmdBuffer[0] == 'W')
+		  {
+			  int tmp;
+			  sscanf((char *)&rduart3.cmdBuffer[1], "%d", &tmp);
+			  PAD_ChangeWidth(&pad, tmp);
+		  }
+		  else if(rduart3.cmdBuffer[0] == 'I')
+		  {
+			  int tmp;
+			  sscanf((char *)&rduart3.cmdBuffer[1], "%d", &tmp);
+			  PAD_ChangeInterval(&pad, tmp);
 		  }
 		  rduart3.cmdUF = 0;
 	  }
@@ -179,6 +199,12 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+  HAL_TIM_PWM_Stop(&htim3, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Stop(&htim15, TIM_CHANNEL_1);
+  HAL_TIM_PWM_Stop(&htim15, TIM_CHANNEL_2);
+  HAL_TIM_PWM_Stop(&htim1, TIM_CHANNEL_4);
+
+
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_1, GPIO_PIN_RESET);
   /* USER CODE END 3 */
 }
@@ -205,8 +231,7 @@ void SystemClock_Config(void)
   }
   /** Initializes the CPU, AHB and APB buses clocks
   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1;
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_HSI;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
@@ -251,14 +276,14 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	switch(GPIO_Pin)
 	{
 		case GPIO_PIN_0://pad voltage down
+			PAD_VoltageDown(&pad);
 			Beep();
 			for(int i = 0; i < 30000; i++);
 			Beep();
-			PAD_VoltageDown(&pad);
 			break;
 		case GPIO_PIN_1://pad voltage up
-			Beep();
 			PAD_VoltageUp(&pad);
+			Beep();
 			break;
 		case GPIO_PIN_2://power button interrupt
 			htim6.Instance->CNT = 0;
@@ -269,11 +294,22 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 	}
 }
 
-uint32_t pulseS = 0;
-
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-	if(htim->Instance == TIM6)
+	if(htim->Instance == TIM3)
+	{
+		static uint32_t pwm_count = 0;
+		ADC_ReadDMA(&adc);
+		if(++pwm_count >= 10)
+		{
+			if(adc.adcBufferOVF)//pad voltage control
+			{
+				PAD_ChangeVoltage(&pad, (double)ADC_Average_mV(&adc));
+			}
+			pwm_count = 0;
+		}
+	}
+	else if(htim->Instance == TIM6)
 	{
 		htim6.Instance->CNT = 0;
 		HAL_TIM_Base_Stop_IT(&htim6);
@@ -286,67 +322,42 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 			working = 0;
 		}
 	}
-	else if(htim->Instance == TIM7)
+	else if(htim->Instance == TIM15)
 	{
-		if(pad.pulseType == SQUARE_WAVE)
+		if(htim15.Instance->CCR1 == 0)
 		{
-			htim15.Instance->CCR1 = htim15.Instance->CCR2 = htim15.Instance->ARR / 2;//pulse on
-			htim15.Instance->RCR = pad.pulseCount - 1;
-			htim15.Instance->SR |= 0x1;
-		}
-		else if(pad.pulseType == RAMP_WAVE)
-		{
-			if(pulseS == 0)
+			if(padState)
 			{
-				htim15.Instance->RCR = 1;
-				htim15.Instance->SR |= 0x1;
+				htim15.Instance->CCR1 = htim15.Instance->ARR / 2 + 1;
+				htim15.Instance->CCR2 = htim15.Instance->ARR / 2 + 1;//pulse on
 			}
+			htim15.Instance->RCR = pad.pulseCount - 1;
 		}
-
-		ADC_ReadDMA(&adc);
-		if(adc.adcBufferOVF)//pad voltage control
-		{
-			PAD_ChangeVoltage(&pad, ADC_Average_mV(&adc));
-		}
-	}
-	else if(htim->Instance == TIM15)//pulse off
-	{
-		if(pad.pulseType == SQUARE_WAVE)
+		else
 		{
 			htim15.Instance->CCR1 = 0;
 			htim15.Instance->CCR2 = htim15.Instance->ARR + 1;
-			htim15.Instance->SR &= ~0x1;//interrupt disable
-		}
-		else if(pad.pulseType == RAMP_WAVE)
-		{
-			switch(pulseS)
-			{
-			case 0:
-				htim15.Instance->CCR1 += 4;
-				if(htim15.Instance->CCR1 >= htim15.Instance->ARR)
-					pulseS = 1;
-				break;
-			case 1:
-				htim15.Instance->CCR1 -= 4;
-				if(htim15.Instance->CCR1 <= 1)
-					pulseS = 2;
-				break;
-			case 2:
-				htim15.Instance->CCR2 -= 4;
-				if(htim15.Instance->CCR2 <= 1)
-					pulseS = 3;
-				break;
-			case 3:
-				htim15.Instance->CCR2 += 4;
-				if(htim15.Instance->CCR2 >= htim15.Instance->ARR)
-				{
-					pulseS = 0;
-					htim15.Instance->SR &= ~0x1;//interrupt disable
-				}
-				break;
-			}
+			htim15.Instance->RCR  = pad.pulsePeriod_us / pad.pulseWidth_us - pad.pulseCount;
 		}
 	}
+	/*else if(htim->Instance == TIM7)
+	{
+		if(padState)
+		{
+			htim15.Instance->CCR1 = htim15.Instance->ARR / 2;
+			htim15.Instance->CCR2 = htim15.Instance->ARR / 2;//pulse on
+		}
+		htim15.Instance->RCR = pad.pulseCount - 1;
+		htim15.Instance->EGR |= 0x20;
+		htim15.Instance->SR |= 0x1;//interrupt enable
+	}
+	else if(htim->Instance == TIM15)//pulse off
+	{
+		htim15.Instance->CCR1 = 0;
+		htim15.Instance->CCR2 = htim15.Instance->ARR + 1;
+		htim15.Instance->EGR |= 0x20;
+		htim15.Instance->SR &= ~0x1;//interrupt disable
+	}*/
 }
 
 

@@ -33,40 +33,45 @@
 extern TIM_HandleTypeDef htim1;
 extern TIM_HandleTypeDef htim3;
 extern TIM_HandleTypeDef htim6;
-extern TIM_HandleTypeDef htim7;
 extern TIM_HandleTypeDef htim15;
 
 /* USER CODE BEGIN Private defines */
-#define VOLTAGE_MAX_LEVEL 15
-
 #define SQUARE_WAVE 0
 #define RAMP_WAVE 1
 
 static uint32_t PAD_AMPLITUDE_VOLTAGE[] =
 {
-		0,
-		1000,
-		2000,
-		3000,
-		4000,
+		3300,
 		5000,
-		6000,
-		7000,
-		8000,
-		9000,
+		7500,
 		10000,
-		11000,
-		12000,
-		13000,
-		14000,
-		15000
+		12500,
+		15000,
+		17500,
+		20000,
+		22500,
+		25000,
+		27500,
+		30000,
+		32500,
+		35000,
+		37500,
+		40000,
+		42500,
+		45000,
+		47500,
+		50000,
 };
+
+#define VOLTAGE_MAX_LEVEL (sizeof(PAD_AMPLITUDE_VOLTAGE)/sizeof(uint32_t))
 
 typedef struct __PAD_ControlData
 {
 	uint32_t pulseAmplitude;
 	uint32_t pulseCount;
-	uint8_t pulseType;
+	uint32_t pulseWidth_us;
+	uint32_t pulsePeriod_us;
+	uint8_t  pulseType;
 }PAD_ControlData;
 
 /* USER CODE END Private defines */
@@ -74,7 +79,6 @@ typedef struct __PAD_ControlData
 void MX_TIM1_Init(void);
 void MX_TIM3_Init(void);
 void MX_TIM6_Init(void);
-void MX_TIM7_Init(void);
 void MX_TIM15_Init(void);
 
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
@@ -82,7 +86,9 @@ void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 /* USER CODE BEGIN Prototypes */
 void PAD_ControlData_Init(PAD_ControlData *pad);
 void PAD_ChangeCount(PAD_ControlData *pad, uint32_t cnt);
-void PAD_ChangeVoltage(PAD_ControlData *pad, uint32_t now_mV);
+void PAD_ChangeWidth(PAD_ControlData *pad, uint32_t time_us);
+void PAD_ChangeInterval(PAD_ControlData *pad, uint32_t period_us);
+void PAD_ChangeVoltage(PAD_ControlData *pad, double now_mV);
 void PAD_VoltageUp(PAD_ControlData *pad);
 void PAD_VoltageDown(PAD_ControlData *pad);
 

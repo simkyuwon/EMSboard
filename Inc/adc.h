@@ -33,7 +33,7 @@
 extern ADC_HandleTypeDef hadc;
 
 /* USER CODE BEGIN Private defines */
-#define adcBufferSize 5
+#define adcBufferSize 10
 
 typedef struct __ADC_Result
 {

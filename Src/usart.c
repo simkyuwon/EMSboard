@@ -72,7 +72,7 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /* USART3 interrupt Init */
-    HAL_NVIC_SetPriority(USART3_6_IRQn, 0, 0);
+    HAL_NVIC_SetPriority(USART3_6_IRQn, 2, 0);
     HAL_NVIC_EnableIRQ(USART3_6_IRQn);
   /* USER CODE BEGIN USART3_MspInit 1 */
 
@@ -117,7 +117,7 @@ void UART_ReceiveData_Init(UART_ReceiveDataTypeDef *rduart, UART_HandleTypeDef* 
 
 HAL_StatusTypeDef UART_ReceiveData(UART_ReceiveDataTypeDef *rduart)
 {
-	HAL_StatusTypeDef ret = HAL_UART_Receive_IT(rduart->huart, &(rduart->uartBuffer[rduart->uartBufferEndIdx++]), 1);
+	HAL_StatusTypeDef ret = HAL_UART_Receive_IT(rduart->huart, &(rduart->uartBuffer[rduart->uartBufferEndIdx++ % uartBufferSize]), 1);
 	if(rduart->uartBufferEndIdx - rduart->uartBufferStartIdx >= uartBufferSize)
 	{
 		rduart->uartBufferEndIdx -= 1;
@@ -126,14 +126,14 @@ HAL_StatusTypeDef UART_ReceiveData(UART_ReceiveDataTypeDef *rduart)
 	return ret;
 }
 
-_Bool CmdCmp(UART_ReceiveDataTypeDef *rduart, char *str, uint32_t size)
+_Bool CmdCmp(UART_ReceiveDataTypeDef *rduart, char *str, uint16_t size)
 {
 	if(rduart->cmdBufferLen != size)
 	{
 		return 0;
 	}
 
-	for(uint32_t i = 0; i < rduart->cmdBufferLen && i < size; i++)
+	for(uint16_t i = 0; i < rduart->cmdBufferLen && i < size; i++)
 	{
 		if(rduart->cmdBuffer[i] != str[i])
 		{
@@ -156,12 +156,15 @@ _Bool UART_CopyUartBuf2CmdBuf(UART_ReceiveDataTypeDef *rduart)
 		return 0;
 	}
 
-	for(rduart->cmdBufferLen = 0; rduart->uartBufferStartIdx + rduart->cmdBufferLen < rduart->uartBufferEndIdx; rduart->cmdBufferLen++)
+	if(1)//HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8) == GPIO_PIN_SET)
 	{
-		rduart->cmdBuffer[rduart->cmdBufferLen] = rduart->uartBuffer[(rduart->uartBufferStartIdx + rduart->cmdBufferLen) % uartBufferSize];
+		for(rduart->cmdBufferLen = 0; rduart->cmdBufferLen < uartBufferSize && rduart->uartBufferStartIdx + rduart->cmdBufferLen < rduart->uartBufferEndIdx; rduart->cmdBufferLen++)
+		{
+			rduart->cmdBuffer[rduart->cmdBufferLen] = rduart->uartBuffer[(rduart->uartBufferStartIdx + rduart->cmdBufferLen) % uartBufferSize];
+		}
+		rduart->cmdBufferLen -= 1;
+		rduart->cmdUF = 1;
 	}
-	rduart->cmdBufferLen -= 1;
-	rduart->cmdUF = 1;
 	rduart->uartBufferStartIdx = rduart->uartBufferEndIdx;
 
 	if(rduart->uartBufferStartIdx >= uartBufferSize)

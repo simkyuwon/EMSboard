@@ -27,7 +27,6 @@
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim3;
 TIM_HandleTypeDef htim6;
-TIM_HandleTypeDef htim7;
 TIM_HandleTypeDef htim15;
 
 /* TIM1 init function */
@@ -98,9 +97,10 @@ void MX_TIM3_Init(void)
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 0;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 20000-1;
+  htim3.Init.Period = 4000-1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
   htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
+
   if (HAL_TIM_Base_Init(&htim3) != HAL_OK)
   {
     Error_Handler();
@@ -120,8 +120,9 @@ void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
+
   sConfigOC.OCMode = TIM_OCMODE_PWM1;
-  sConfigOC.Pulse = 100-1;
+  sConfigOC.Pulse = 0;
   sConfigOC.OCPolarity = TIM_OCPOLARITY_HIGH;
   sConfigOC.OCFastMode = TIM_OCFAST_DISABLE;
   if (HAL_TIM_PWM_ConfigChannel(&htim3, &sConfigOC, TIM_CHANNEL_1) != HAL_OK)
@@ -141,21 +142,6 @@ void MX_TIM6_Init(void)
   htim6.Init.Period = 3000-1;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
-  {
-    Error_Handler();
-  }
-
-}
-/* TIM7 init function */
-void MX_TIM7_Init(void)
-{
-
-  htim7.Instance = TIM7;
-  htim7.Init.Prescaler = 356-1;
-  htim7.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim7.Init.Period = 2000-1;
-  htim7.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
-  if (HAL_TIM_Base_Init(&htim7) != HAL_OK)
   {
     Error_Handler();
   }
@@ -250,7 +236,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
     __HAL_RCC_TIM3_CLK_ENABLE();
 
     /* TIM3 interrupt Init */
-    HAL_NVIC_SetPriority(TIM3_IRQn, 1, 0);
+    HAL_NVIC_SetPriority(TIM3_IRQn, 2, 0);
     HAL_NVIC_EnableIRQ(TIM3_IRQn);
   /* USER CODE BEGIN TIM3_MspInit 1 */
 
@@ -271,21 +257,6 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
 
   /* USER CODE END TIM6_MspInit 1 */
   }
-  else if(tim_baseHandle->Instance==TIM7)
-  {
-  /* USER CODE BEGIN TIM7_MspInit 0 */
-
-  /* USER CODE END TIM7_MspInit 0 */
-    /* TIM7 clock enable */
-    __HAL_RCC_TIM7_CLK_ENABLE();
-
-    /* TIM7 interrupt Init */
-    HAL_NVIC_SetPriority(TIM7_IRQn, 1, 0);
-    HAL_NVIC_EnableIRQ(TIM7_IRQn);
-  /* USER CODE BEGIN TIM7_MspInit 1 */
-
-  /* USER CODE END TIM7_MspInit 1 */
-  }
   else if(tim_baseHandle->Instance==TIM15)
   {
   /* USER CODE BEGIN TIM15_MspInit 0 */
@@ -295,7 +266,7 @@ void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
     __HAL_RCC_TIM15_CLK_ENABLE();
 
     /* TIM15 interrupt Init */
-    HAL_NVIC_SetPriority(TIM15_IRQn, 1, 0);
+    HAL_NVIC_SetPriority(TIM15_IRQn, 1, 1);
     HAL_NVIC_EnableIRQ(TIM15_IRQn);
   /* USER CODE BEGIN TIM15_MspInit 1 */
 
@@ -414,20 +385,6 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 
   /* USER CODE END TIM6_MspDeInit 1 */
   }
-  else if(tim_baseHandle->Instance==TIM7)
-  {
-  /* USER CODE BEGIN TIM7_MspDeInit 0 */
-
-  /* USER CODE END TIM7_MspDeInit 0 */
-    /* Peripheral clock disable */
-    __HAL_RCC_TIM7_CLK_DISABLE();
-
-    /* TIM7 interrupt Deinit */
-    HAL_NVIC_DisableIRQ(TIM7_IRQn);
-  /* USER CODE BEGIN TIM7_MspDeInit 1 */
-
-  /* USER CODE END TIM7_MspDeInit 1 */
-  }
   else if(tim_baseHandle->Instance==TIM15)
   {
   /* USER CODE BEGIN TIM15_MspDeInit 0 */
@@ -447,7 +404,9 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 /* USER CODE BEGIN 1 */
 void PAD_ControlData_Init(PAD_ControlData *pad)
 {
-	pad->pulseAmplitude = 5;
+	pad->pulseAmplitude = 3;
+	pad->pulseWidth_us = 400;
+	pad->pulsePeriod_us = 44000;
 	pad->pulseCount = 3;
 	pad->pulseType = SQUARE_WAVE;
 }
@@ -464,27 +423,60 @@ void PAD_ChangeCount(PAD_ControlData *pad, uint32_t cnt)
 	}
 }
 
-void PAD_ChangeVoltage(PAD_ControlData *pad, uint32_t now_mV)
+void PAD_ChangeWidth(PAD_ControlData * pad, uint32_t time_us)
 {
+	pad->pulseWidth_us = time_us;
+	if(time_us <= 25)
+		htim15.Instance->ARR = 2;
+	else
+		htim15.Instance->ARR = time_us / 25 - 1;
+}
+
+void PAD_ChangeInterval(PAD_ControlData *pad, uint32_t period_us)
+{
+	pad->pulsePeriod_us = period_us;
+}
+
+void PAD_ChangeVoltage(PAD_ControlData *pad, double now_mV)
+{
+	static double prev_mV = 0;
+	static double prev_target_mV = -1;
 	now_mV *= 31;
-	if(PAD_AMPLITUDE_VOLTAGE[pad->pulseAmplitude] > now_mV)
+	double target_mV = (double)PAD_AMPLITUDE_VOLTAGE[pad->pulseAmplitude];
+
+	static double integral = 0;
+	if(target_mV != prev_target_mV)
 	{
-		htim3.Instance->CCR1 += (PAD_AMPLITUDE_VOLTAGE[pad->pulseAmplitude] - now_mV)/100;
-		if(htim3.Instance->CCR1 > 10000)
-			htim3.Instance->CCR1 = 10000;
+		prev_target_mV = target_mV;
+		integral = 0;
 	}
 	else
-	{
-		if(htim3.Instance->CCR1 < (now_mV - PAD_AMPLITUDE_VOLTAGE[pad->pulseAmplitude])/100)
-			htim3.Instance->CCR1 = 1;
-		else
-			htim3.Instance->CCR1 -= (now_mV - PAD_AMPLITUDE_VOLTAGE[pad->pulseAmplitude])/100;
-	}
+		integral += (target_mV - now_mV) / 1000.0F;
+
+	const double Kp = 0.001, Kd = 0.0001, Ki = 0.0005;
+
+	double MV = (target_mV - now_mV) * Kp;
+	MV += (now_mV - prev_mV) * Kd;
+	MV += integral * Ki;
+
+
+	int32_t CCR = htim3.Instance->CCR1 + (int32_t)MV;
+
+	//CCR = htim3.Instance->CCR1 + (int32_t)(PAD_AMPLITUDE_VOLTAGE[pad->pulseAmplitude] - now_mV)/5000;
+
+	if(CCR > 1000)
+		CCR = 1000;
+	if(CCR < 0)
+		CCR = 0;
+
+	htim3.Instance->CCR1 = (uint32_t)CCR;
+
+	prev_mV = now_mV;
 }
 
 void PAD_VoltageUp(PAD_ControlData *pad)
 {
-	if(pad->pulseAmplitude < VOLTAGE_MAX_LEVEL)
+	if(pad->pulseAmplitude + 1 < VOLTAGE_MAX_LEVEL)
 		pad->pulseAmplitude++;
 }
 
