@@ -34,19 +34,19 @@ void MX_ADC_Init(void)
 
   /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion)
   */
-  hadc.Instance = ADC1;
-  hadc.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
-  hadc.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
-  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  hadc.Init.LowPowerAutoWait = DISABLE;
-  hadc.Init.LowPowerAutoPowerOff = DISABLE;
-  hadc.Init.ContinuousConvMode = ENABLE;
-  hadc.Init.DiscontinuousConvMode = DISABLE;
-  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc.Init.DMAContinuousRequests = ENABLE;
+  hadc.Instance 					= ADC1;
+  hadc.Init.ClockPrescaler 			= ADC_CLOCK_SYNC_PCLK_DIV2;
+  hadc.Init.Resolution 				= ADC_RESOLUTION_12B;
+  hadc.Init.DataAlign 				= ADC_DATAALIGN_RIGHT;
+  hadc.Init.ScanConvMode 			= ADC_SCAN_DIRECTION_FORWARD;
+  hadc.Init.EOCSelection 			= ADC_EOC_SINGLE_CONV;
+  hadc.Init.LowPowerAutoWait 		= DISABLE;
+  hadc.Init.LowPowerAutoPowerOff 	= DISABLE;
+  hadc.Init.ContinuousConvMode 		= ENABLE;
+  hadc.Init.DiscontinuousConvMode 	= DISABLE;
+  hadc.Init.ExternalTrigConv 		= ADC_SOFTWARE_START;
+  hadc.Init.ExternalTrigConvEdge 	= ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc.Init.DMAContinuousRequests 	= ENABLE;
   hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
   if (HAL_ADC_Init(&hadc) != HAL_OK)
   {
@@ -54,9 +54,9 @@ void MX_ADC_Init(void)
   }
   /** Configure for the selected ADC regular channel to be converted.
   */
-  sConfig.Channel = ADC_CHANNEL_8;
-  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
-  sConfig.SamplingTime = ADC_SAMPLETIME_239CYCLES_5;
+  sConfig.Channel 		= ADC_CHANNEL_8;
+  sConfig.Rank 			= ADC_RANK_CHANNEL_NUMBER;
+  sConfig.SamplingTime 	= ADC_SAMPLETIME_239CYCLES_5;
   if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -80,21 +80,21 @@ void HAL_ADC_MspInit(ADC_HandleTypeDef* adcHandle)
     /**ADC GPIO Configuration
     PB0     ------> ADC_IN8
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_0;
-    GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Pin 	= GPIO_PIN_0;
+    GPIO_InitStruct.Mode 	= GPIO_MODE_ANALOG;
+    GPIO_InitStruct.Pull 	= GPIO_NOPULL;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /* ADC1 DMA Init */
     /* ADC Init */
-    hdma_adc.Instance = DMA1_Channel1;
-    hdma_adc.Init.Direction = DMA_PERIPH_TO_MEMORY;
-    hdma_adc.Init.PeriphInc = DMA_PINC_DISABLE;
-    hdma_adc.Init.MemInc = DMA_MINC_ENABLE;
-    hdma_adc.Init.PeriphDataAlignment = DMA_PDATAALIGN_WORD;
-    hdma_adc.Init.MemDataAlignment = DMA_MDATAALIGN_WORD;
-    hdma_adc.Init.Mode = DMA_CIRCULAR;
-    hdma_adc.Init.Priority = DMA_PRIORITY_LOW;
+    hdma_adc.Instance 					= DMA1_Channel1;
+    hdma_adc.Init.Direction 			= DMA_PERIPH_TO_MEMORY;
+    hdma_adc.Init.PeriphInc 			= DMA_PINC_DISABLE;
+    hdma_adc.Init.MemInc 				= DMA_MINC_ENABLE;
+    hdma_adc.Init.PeriphDataAlignment	= DMA_PDATAALIGN_WORD;
+    hdma_adc.Init.MemDataAlignment 		= DMA_MDATAALIGN_WORD;
+    hdma_adc.Init.Mode 					= DMA_CIRCULAR;
+    hdma_adc.Init.Priority 				= DMA_PRIORITY_LOW;
     if (HAL_DMA_Init(&hdma_adc) != HAL_OK)
     {
       Error_Handler();
@@ -149,16 +149,13 @@ void ADC_Result_Init(ADC_Result* adc, ADC_HandleTypeDef *hadc)
 
 void ADC_ReadDMA(ADC_Result* adc)
 {
-	if(adc->adcBufferIdx < adcBufferSize)
-	{
+	if(!adc->adcBufferOVF)
 		adc->adcBuffer[adc->adcBufferIdx++] = adc->adcData;
-		adc->adcBufferOVF = 0;
-	}
-	else
-	{
-		adc->adcBuffer[adcBufferSize - 1] = adc->adcData;
+
+	if(adc->adcBufferIdx >= adcBufferSize)	//adc buffer overflow(data update complete)
 		adc->adcBufferOVF = 1;
-	}
+	else
+		adc->adcBufferOVF = 0;
 }
 
 uint32_t ADC_Average_mV(ADC_Result *adc)
@@ -168,7 +165,8 @@ uint32_t ADC_Average_mV(ADC_Result *adc)
 	{
 		avg += adc->adcBuffer[i];
 	}
-	adc->adcBufferIdx = 0;
+	adc->adcBufferIdx = 0;					//init adcBuffer
+	adc->adcBufferOVF = 0;
 	return avg / adcBufferSize;
 }
 /* USER CODE END 1 */

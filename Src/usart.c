@@ -30,16 +30,16 @@ UART_HandleTypeDef huart3;
 void MX_USART3_UART_Init(void)
 {
 
-  huart3.Instance = USART3;
-  huart3.Init.BaudRate = 9600;
-  huart3.Init.WordLength = UART_WORDLENGTH_8B;
-  huart3.Init.StopBits = UART_STOPBITS_1;
-  huart3.Init.Parity = UART_PARITY_NONE;
-  huart3.Init.Mode = UART_MODE_TX_RX;
-  huart3.Init.HwFlowCtl = UART_HWCONTROL_NONE;
-  huart3.Init.OverSampling = UART_OVERSAMPLING_8;
-  huart3.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
-  huart3.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  huart3.Instance 						= USART3;
+  huart3.Init.BaudRate 					= 9600;
+  huart3.Init.WordLength 				= UART_WORDLENGTH_8B;
+  huart3.Init.StopBits 					= UART_STOPBITS_1;
+  huart3.Init.Parity 					= UART_PARITY_NONE;
+  huart3.Init.Mode 						= UART_MODE_TX_RX;
+  huart3.Init.HwFlowCtl 				= UART_HWCONTROL_NONE;
+  huart3.Init.OverSampling 				= UART_OVERSAMPLING_8;
+  huart3.Init.OneBitSampling 			= UART_ONE_BIT_SAMPLE_DISABLE;
+  huart3.AdvancedInit.AdvFeatureInit 	= UART_ADVFEATURE_NO_INIT;
   if (HAL_UART_Init(&huart3) != HAL_OK)
   {
     Error_Handler();
@@ -64,15 +64,15 @@ void HAL_UART_MspInit(UART_HandleTypeDef* uartHandle)
     PB10     ------> USART3_TX
     PB11     ------> USART3_RX
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11;
-    GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-    GPIO_InitStruct.Pull = GPIO_NOPULL;
-    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
-    GPIO_InitStruct.Alternate = GPIO_AF4_USART3;
+    GPIO_InitStruct.Pin 		= GPIO_PIN_10|GPIO_PIN_11;
+    GPIO_InitStruct.Mode 		= GPIO_MODE_AF_PP;
+    GPIO_InitStruct.Pull 		= GPIO_NOPULL;
+    GPIO_InitStruct.Speed		= GPIO_SPEED_FREQ_HIGH;
+    GPIO_InitStruct.Alternate	= GPIO_AF4_USART3;
     HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
     /* USART3 interrupt Init */
-    HAL_NVIC_SetPriority(USART3_6_IRQn, 2, 0);
+    HAL_NVIC_SetPriority(USART3_6_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(USART3_6_IRQn);
   /* USER CODE BEGIN USART3_MspInit 1 */
 
@@ -108,11 +108,11 @@ void HAL_UART_MspDeInit(UART_HandleTypeDef* uartHandle)
 /* USER CODE BEGIN 1 */
 void UART_ReceiveData_Init(UART_ReceiveDataTypeDef *rduart, UART_HandleTypeDef* uartHandle)
 {
-	rduart->huart = uartHandle;
-	rduart->cmdUF = 0;
-	rduart->uartORF = 0;
-	rduart->uartBufferStartIdx = 0;
-	rduart->uartBufferEndIdx = 0;
+	rduart->huart 				= uartHandle;
+	rduart->cmdUF 				= 0;
+	rduart->uartOVF 			= 0;
+	rduart->uartBufferStartIdx 	= 0;
+	rduart->uartBufferEndIdx 	= 0;
 }
 
 HAL_StatusTypeDef UART_ReceiveData(UART_ReceiveDataTypeDef *rduart)
@@ -121,19 +121,15 @@ HAL_StatusTypeDef UART_ReceiveData(UART_ReceiveDataTypeDef *rduart)
 	if(rduart->uartBufferEndIdx - rduart->uartBufferStartIdx >= uartBufferSize)
 	{
 		rduart->uartBufferEndIdx -= 1;
-		rduart->uartORF = 1;
+		rduart->uartOVF = 1;
 	}
 	return ret;
 }
 
-_Bool CmdCmp(UART_ReceiveDataTypeDef *rduart, char *str, uint16_t size)
+_Bool CmdCmp(UART_ReceiveDataTypeDef *rduart, char *str) //command compare
 {
-	if(rduart->cmdBufferLen != size)
-	{
-		return 0;
-	}
-
-	for(uint16_t i = 0; i < rduart->cmdBufferLen && i < size; i++)
+	uint16_t i;
+	for(i = 0; i < rduart->cmdBufferLen && str[i]; i++)
 	{
 		if(rduart->cmdBuffer[i] != str[i])
 		{
@@ -141,6 +137,8 @@ _Bool CmdCmp(UART_ReceiveDataTypeDef *rduart, char *str, uint16_t size)
 		}
 	}
 
+	if(rduart->cmdBuffer[i] >= 33)	//punctuation point or number or alphabet
+		return 0;
 	return 1;
 }
 
@@ -156,21 +154,20 @@ _Bool UART_CopyUartBuf2CmdBuf(UART_ReceiveDataTypeDef *rduart)
 		return 0;
 	}
 
-	if(1)//HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_8) == GPIO_PIN_SET)
+	for(rduart->cmdBufferLen = 0; rduart->cmdBufferLen < uartBufferSize && rduart->uartBufferStartIdx + rduart->cmdBufferLen < rduart->uartBufferEndIdx; rduart->cmdBufferLen++)
 	{
-		for(rduart->cmdBufferLen = 0; rduart->cmdBufferLen < uartBufferSize && rduart->uartBufferStartIdx + rduart->cmdBufferLen < rduart->uartBufferEndIdx; rduart->cmdBufferLen++)
-		{
-			rduart->cmdBuffer[rduart->cmdBufferLen] = rduart->uartBuffer[(rduart->uartBufferStartIdx + rduart->cmdBufferLen) % uartBufferSize];
-		}
-		rduart->cmdBufferLen -= 1;
-		rduart->cmdUF = 1;
+		rduart->cmdBuffer[rduart->cmdBufferLen] = rduart->uartBuffer[(rduart->uartBufferStartIdx + rduart->cmdBufferLen) % uartBufferSize];
 	}
+
+	rduart->cmdBuffer[rduart->cmdBufferLen--] = '\0';
+	rduart->cmdUF = 1;			//command buffer update flag
+
 	rduart->uartBufferStartIdx = rduart->uartBufferEndIdx;
 
 	if(rduart->uartBufferStartIdx >= uartBufferSize)
 	{
-		rduart->uartBufferStartIdx -= uartBufferSize;
-		rduart->uartBufferEndIdx -= uartBufferSize;
+		rduart->uartBufferStartIdx 	-= uartBufferSize;
+		rduart->uartBufferEndIdx 	-= uartBufferSize;
 	}
 
 	return 1;
